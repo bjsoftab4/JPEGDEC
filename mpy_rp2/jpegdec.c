@@ -20,8 +20,18 @@
 // limitations under the License.
 //===========================================================================
 //
-#include "JPEGDEC.h"
+#include "../src/JPEGDEC.h"
 
+// ebina
+static int mydiv(int a, int b)
+{
+  int r = 0;
+  while( a > b) {
+    a = a - b;
+    r++;
+  }
+  return r;
+}
 #ifdef TEENSYDUINO
 #include "my_cm4_simd.h"
 //#define HAS_SIMD
@@ -1570,6 +1580,14 @@ static void JPEGGetMoreData(JPEGIMAGE *pPage)
 //
 static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
 {
+	#if 0 //ebina
+	JPEGGetSOS(NULL, NULL);
+ GetTIFFInfo(NULL, 0, 0);
+ JPEGMakeHuffTables(NULL, 0);
+JPEGGetHuffTables(NULL, 0, NULL);
+	
+	#else
+	
     int iBytesRead;
     int i, iOffset, iTableOffset;
     uint8_t ucTable, *s = pPage->ucFileBuf;
@@ -1578,12 +1596,20 @@ static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
     
     pPage->pFramebuffer = NULL; // this must be set AFTER calling this function
     // make sure usPixels is 16-byte aligned for S3 SIMD (and possibly others)
-    i = (int)(int64_t)pPage->usUnalignedPixels;
+#if defined(MICROPY_HW_BOARD_NAME)
+	i = (int)pPage->usUnalignedPixels;
+#else
+	i = (int)(int64_t)pPage->usUnalignedPixels;
+#endif
     i &= 15;
     if (i == 0) i = 16; // already 16-byte aligned
     pPage->usPixels = &pPage->usUnalignedPixels[(16-i)>>1];
     // do the same for the MCU buffers
+#if defined(MICROPY_HW_BOARD_NAME)
+	i = (int)pPage->sUnalignedMCUs;
+#else
     i = (int)(int64_t)pPage->sUnalignedMCUs;
+#endif
     i &= 15;
     if (i == 0) i = 16;
     pPage->sMCUs = &pPage->sUnalignedMCUs[(16-i)>>1];
@@ -1780,6 +1806,7 @@ static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
         return 1;
     }
     pPage->iError = JPEG_DECODE_ERROR;
+    #endif
     return 0;
 } /* JPEGParseInfo() */
 //
@@ -4942,6 +4969,7 @@ uint8_t pixelmask=0, shift=0;
 //
 static int DecodeJPEG(JPEGIMAGE *pJPEG)
 {
+#if 1 //ebina
     int cx, cy, x, y, mcuCX, mcuCY;
     int iLum0, iLum1, iLum2, iLum3, iCr, iCb;
     signed int iDCPred0, iDCPred1, iDCPred2;
@@ -5056,7 +5084,8 @@ static int DecodeJPEG(JPEGIMAGE *pJPEG)
     iErr = 0;
     pJPEG->iResCount = pJPEG->iResInterval;
     // Calculate how many MCUs we can fit in the pixel buffer to maximize LCD drawing speed
-    iMCUCount = MAX_BUFFERED_PIXELS / (mcuCX * mcuCY);
+    //ebina iMCUCount = MAX_BUFFERED_PIXELS / (mcuCX * mcuCY);
+    iMCUCount = mydiv(MAX_BUFFERED_PIXELS , (mcuCX * mcuCY));
     if (pJPEG->ucPixelType == RGB8888) {
         iMCUCount /= 2; // half as many will fit
     }
@@ -5074,9 +5103,10 @@ static int DecodeJPEG(JPEGIMAGE *pJPEG)
     if (pJPEG->ucPixelType > EIGHT_BIT_GRAYSCALE) { // dithered, override the max MCU count
         iMCUCount = cx; // do the whole row
     }
-    if (pJPEG->iCropCX != pJPEG->iWidth /*(cx * mcuCX)*/) { // crop enabled
+    if (pJPEG->iCropCX != (cx * mcuCX)) { // crop enabled
         if (iMCUCount * mcuCX > pJPEG->iCropCX) {
-            iMCUCount = (pJPEG->iCropCX / mcuCX); // maximum width is the crop width
+            // ebina iMCUCount = (pJPEG->iCropCX / mcuCX); // maximum width is the crop width
+            iMCUCount = mydiv(pJPEG->iCropCX , mcuCX); // maximum width is the crop width
         }
     }
     jd.iBpp = 16;
@@ -5315,10 +5345,7 @@ if(pJPEG->pFramebuffer == NULL) {
                 if ((jd.y - pJPEG->iYOffset + mcuCY) > iCurH) { // last row needs to be trimmed
                    jd.iHeight = iCurH - (jd.y - pJPEG->iYOffset);
                 }
-                if (pJPEG->ucPixelType > EIGHT_BIT_GRAYSCALE)
-                    jd.pPixels = (uint16_t *)pJPEG->pDitherBuffer; 
-                else
-                    jd.pPixels = pJPEG->usPixels;
+                jd.pPixels = pJPEG->usPixels;
                 bContinue = (*pJPEG->pfnDraw)(&jd);
                 iDMAOffset ^= iDMASize; // toggle ping-pong offset
                 jd.x += iPitch;
@@ -5327,9 +5354,6 @@ if(pJPEG->pFramebuffer == NULL) {
                 } else if ((cx - 1 - x) < iMCUCount) // change pitch for the last set of MCUs on this row
                     iPitch = (cx - 1 - x) * mcuCX;
                 xoff = 0;
-                if (iPitch & (mcuCX-1)) { // we don't clip the MCU drawing, so expand it
-                    iPitch = (iPitch + (mcuCX-1)) & ~(mcuCX-1);
-                }
             }
             if (pJPEG->iResInterval)
             {
@@ -5351,4 +5375,30 @@ if(pJPEG->pFramebuffer == NULL) {
     if (iErr != 0)
         pJPEG->iError = JPEG_DECODE_ERROR;
     return (iErr == 0);
+	
+	#else //ebina
+ JPEGDither(NULL, 0, 0);
+ JPEGPutMCU21(NULL, 0, 0);
+ JPEGPutMCU12(NULL, 0, 0);
+ JPEGPutMCU22(NULL, 0, 0);
+ JPEGPutMCU11(NULL, 0, 0);
+ JPEGPutMCUGray(NULL, 0, 0);
+ JPEGPutMCU8BitGray(NULL, 0, 0);
+ JPEGIDCT(NULL, 0, 0);
+ JPEGDecodeMCU(NULL, 0,NULL);
+ JPEGDecodeMCU_P(NULL, 0,NULL);
+JPEGFixQuantD(NULL);
+JPEGGetMoreData(NULL);
+ return 0;
+	#endif //ebina
 } /* DecodeJPEG() */
+
+void dummy_func()
+       {
+       	DecodeJPEG(NULL);
+       	JPEGInit(NULL);
+       	seekMem(NULL, 0);
+       	readFLASH(NULL,NULL,0);
+       	readRAM(NULL,NULL,0);
+       }
+
