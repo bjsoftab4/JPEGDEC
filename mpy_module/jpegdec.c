@@ -175,16 +175,19 @@ static void decode_core1_prologue(int drawmode, JPEGIMAGE *pJpeg, int iDataSize,
     	}
     }
 }
+void JPEGWaitDma();
 
 void decode_core1_main(){
 	multicore_lockout_victim_init();
 	core1_running = 1;
 	core1_result = DecodeJPEG(&_jpeg);
+	JPEGWaitDma();
 	core1_running = 2;
 }
 void decode_core0_main(){
 	core1_running = 1;
 	core1_result = DecodeJPEG(&_jpeg);
+	JPEGWaitDma();
 	core1_running = 2;
 }
 
