@@ -146,8 +146,8 @@ static int decode_core1_epilogue(){
 	}
 //	if(drawmode == 0) {
 //	} else if( drawmode == 1) {
-		uint8_t pageNum = JPEGGetDrawPage();
-		JPEGSetViewPage(pageNum);
+//		uint8_t pageNum = JPEGGetDrawPage();
+//		JPEGSetViewPage(pageNum);
 //	}
 	return core1_result;
 }
@@ -164,14 +164,15 @@ static void decode_core1_prologue(int drawmode, JPEGIMAGE *pJpeg, int iDataSize,
    			JPEG_setCropArea(&_jpeg, 0, 0, disp_width, disp_height);
     	if(drawmode == 0) {
     		JPEGModeChange(0);
-    	} else if( drawmode == 1) {
+    	} else if( drawmode == 1 || drawmode == 2) {
     		JPEGModeChange(1);
-			uint8_t pageNum = JPEGGetViewPage();
-			if( pageNum == 0 || pageNum == 2) {	// not initialized or page 2
-				JPEGSetDrawPage(1);
-			} else {
-				JPEGSetDrawPage(2);
-			}
+    		JPEGSetDrawPage(drawmode);
+//			uint8_t pageNum = JPEGGetViewPage();
+//			if( pageNum == 0 || pageNum == 2) {	// not initialized or page 2
+//				JPEGSetDrawPage(1);
+//			} else {
+//				JPEGSetDrawPage(2);
+//			}
     	}
     }
 }
@@ -182,12 +183,18 @@ void decode_core1_main(){
 	core1_running = 1;
 	core1_result = DecodeJPEG(&_jpeg);
 	JPEGWaitDma();
+	uint8_t pageNum = JPEGGetDrawPage();
+	JPEGSetViewPage(pageNum);
+
 	core1_running = 2;
 }
 void decode_core0_main(){
 	core1_running = 1;
 	core1_result = DecodeJPEG(&_jpeg);
 	JPEGWaitDma();
+	uint8_t pageNum = JPEGGetDrawPage();
+	JPEGSetViewPage(pageNum);
+
 	core1_running = 2;
 }
 
@@ -218,7 +225,7 @@ static mp_obj_t jpegdec_decode_core(size_t n_args, const mp_obj_t *args) {
     int iDataSize = inbuf.len;
     uint8_t *pData = (uint8_t *)inbuf.buf;
 	
-	int drawmode = mp_obj_get_int(args[1]);	// mode 0:simple, 1:flip screen
+	int drawmode = mp_obj_get_int(args[1]);	// mode 0:simple, 1:draw page1, 2:draw page2
 	int run_core = 0;
 	if( n_args == 3) {
 		run_core = mp_obj_get_int(args[2]);	// mode 0:single core, 1:core1
@@ -286,7 +293,7 @@ static mp_obj_t jpegdec_decode_core_wait(size_t n_args, const mp_obj_t *args) {
         mp_obj_new_int(res3),
     };
 
-    return mp_obj_new_tuple(3, res);
+    return mp_obj_new_tuple(4, res);
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(jpegdec_decode_core_wait_obj, 0, 1, jpegdec_decode_core_wait);
 
@@ -404,14 +411,11 @@ static mp_obj_t jpegdec_decode_opt(size_t n_args, const mp_obj_t *args) {
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(jpegdec_decode_opt_obj, 2, 3, jpegdec_decode_opt);
 
 static mp_obj_t jpegdec_start(size_t n_args, const mp_obj_t *args) {
-    int result = 1;
 	int drawmode = mp_obj_get_int(args[0]);	// mode 0:simple, 1:flip screen
 	JPEGModeStart(drawmode);
-    mp_obj_t res[1] = {
-        mp_obj_new_int(result),
-    };
 
-    return mp_obj_new_tuple(1, res);
+    return mp_obj_new_int((int)&_jpeg);
+
     // if( result == 0) result = _jpeg.iError;
     // return mp_obj_new_int(result);
 
@@ -444,6 +448,8 @@ static mp_obj_t jpegdec_setview(size_t n_args, const mp_obj_t *args) {
 
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(jpegdec_setview_obj, 1, 1, jpegdec_setview);
 
+uint8_t *JPEG_GetVtfb();
+uint8_t *JPEGGetFramebuffer();
 
 static mp_obj_t jpegdec_getinfo(size_t n_args, const mp_obj_t *args) {
 	int result;
@@ -453,6 +459,10 @@ static mp_obj_t jpegdec_getinfo(size_t n_args, const mp_obj_t *args) {
     int iDataSize = inbuf.len;
     uint8_t *pData = (uint8_t *)inbuf.buf;
 	//mt_lock = -1;
+	while(core1_decode_is_busy()) {
+	    tight_loop_contents(); 
+	}
+
 	st_jpegdec_init(&_jpeg, iDataSize, pData, JPEGDraw);
 	result = JPEGInit(&_jpeg);
     mp_obj_t res[7] = {
@@ -460,8 +470,8 @@ static mp_obj_t jpegdec_getinfo(size_t n_args, const mp_obj_t *args) {
         mp_obj_new_int(_jpeg.iWidth),
         mp_obj_new_int(_jpeg.iHeight),
 		mp_obj_new_int((int)(&_jpeg)),
-		mp_obj_new_int((int)(JPEGGetMode())),
-		mp_obj_new_int((int)(JPEGGetViewPage())),
+		mp_obj_new_int((int)(JPEGGetFramebuffer())),
+		mp_obj_new_int((int)(JPEG_GetVtfb())),
 		mp_obj_new_int((int)(JPEGGetDrawPage())),
     };
     return mp_obj_new_tuple(7, res);
