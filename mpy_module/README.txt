@@ -1,3 +1,8 @@
+How to use
+
+import jpegdec
+
+
 関数仕様
 
 ユーザー向けIF
@@ -21,7 +26,7 @@ void JPEGModeEnd();
 
 ｰｰ
 改造残
-make_new 対応
+make_new 対応	
 JPEGIMAGE を m_malloc で確保
 サイズに対応したスケーリング
 ================================
@@ -36,6 +41,3 @@ uint8_t JPEGGetPartial() {
 static void JPEGCleanVRAM() {
 static void JPEGDmaWait(){
 
-
-
-モード整理
