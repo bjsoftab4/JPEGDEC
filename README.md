@@ -1,5 +1,9 @@
-JPEGDEC<br>
-micropython��mpy�t�@�C���Ƃ��Ď��s�ł���悤�ɏC���������A
-import���Ď��s�����悤�Ƃ���� jpegdec��bss�̈��micropython���f�[�^������t���āA�������j����N�����B
+bitbank2/JPEGDEC を使用して、picocalc に jpegデコーダを追加する。
 
-micropython���̖�肩������Ȃ����ǋy�͂�����߂Č���ɂē���
+mpy_rp2/
+micropythonのmpyファイルとして実行できるようにしたが、importして実行させようとすると jpegdecのbss領域にmicropythonがデータを割り付けて、メモリ破壊を起こす。
+micropython側の問題かもしれないが追及はあきらめて現状にて凍結
+
+mpy_module/
+micropython に組み込んで実行するバージョン　現状ではうまく動いている
+zenodante/PicoCalc-micropython-driver を改造しまくってるので、本流とは別のリポジトリにした
